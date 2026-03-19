@@ -6,7 +6,7 @@
 // ============================================================
 
 
-// ── Column indexes for #boqSubform ──────────────────────────
+// ── Column indexes for #boqSubform ─ ─────────────────────────
 const BOQ_COL = {
     LINE        : 1,
     QUANTITY    : 5,   // ← ONLY trigger column
