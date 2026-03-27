@@ -52,6 +52,29 @@ const MM_COL = {
     TOTAL_MANDAY_COST: 33   // ← written
 };
 
+const CALC_LOG_PANEL_ID = 'calcTriggerLog';
+const CALC_LOG_LIMIT = 20;
+
+function calcLog(message, level = 'info') {
+    const prefixedMessage = `[Calculations] ${message}`;
+
+    if (level === 'error') console.error(prefixedMessage);
+    else if (level === 'warn') console.warn(prefixedMessage);
+    else console.log(prefixedMessage);
+
+    const logPanel = document.getElementById(CALC_LOG_PANEL_ID);
+    if (!logPanel) return;
+
+    const entry = document.createElement('div');
+    entry.className = `calc-log-entry calc-log-${level}`;
+    entry.textContent = `${new Date().toLocaleTimeString()} ${message}`;
+    logPanel.prepend(entry);
+
+    while (logPanel.children.length > CALC_LOG_LIMIT) {
+        logPanel.removeChild(logPanel.lastElementChild);
+    }
+}
+
 
 // ────────────────────────────────────────────────────────────
 // DOM HELPERS
@@ -361,51 +384,52 @@ function runSCSCalc() {
 }
 
 
-// ────────────────────────────────────────────────────────────
-// EVENT BINDING
-// Uses event delegation on #boqSubform tbody.
-// Fires runSCSCalc() ONLY when the user types into the
-// Quantity column (index 5 = BOQ_COL.QUANTITY).
-// Works for all rows — static and dynamically added.
-// ────────────────────────────────────────────────────────────
-function bindBOQQuantityTrigger() {
-    const boqTbody = document.querySelector('#boqSubform tbody');
-    if (!boqTbody) {
-        console.warn('[Calculations] #boqSubform tbody not found — trigger not bound.');
+function triggerBOQQuantityCalculation(event, source) {
+    const target = event?.target;
+    if (!target || typeof target.closest !== 'function') return;
+
+    const td = target.closest('td');
+    const row = target.closest('tr');
+    if (!td || !row) {
+        calcLog(`Quantity trigger ignored from ${source} because the BOQ row context was not found.`, 'warn');
         return;
     }
 
-    // Prevent duplicate listeners when edit mode re-initializes the widget.
-    if (boqTbody.dataset.scsCalcBound === 'true') {
+    const colIndex = Array.from(row.cells).indexOf(td);
+    if (colIndex !== BOQ_COL.QUANTITY) return;
+
+    const lineValue = calcGetStr(row, BOQ_COL.LINE) || 'n/a';
+    const quantityValue = calcGetNum(row, BOQ_COL.QUANTITY);
+
+    calcLog(`BOQ Quantity changed via ${source}. Line: ${lineValue}, Quantity: ${quantityValue}`);
+    runSCSCalc();
+}
+
+
+// ────────────────────────────────────────────────────────────
+// BOQ QUANTITY TRIGGER
+// Exposes a global handler used by the BOQ Quantity inputs.
+// This keeps the trigger reliable for initial rows, loaded rows,
+// duplicated rows, and rows added dynamically in the widget.
+// ────────────────────────────────────────────────────────────
+window.runSCSCalc = runSCSCalc;
+window.handleBOQQuantityInput = function (event) {
+    triggerBOQQuantityCalculation(event, 'inline handler');
+};
+
+function initBOQQuantityTrigger() {
+    const boqTable = document.getElementById('boqSubform');
+    if (!boqTable) {
+        calcLog('#boqSubform not found — quantity trigger helper not initialised.', 'warn');
         return;
     }
 
-    const handleQuantityEdit = function (e) {
-        const td = e.target.closest('td');
-        if (!td) return;
-
-        const row      = td.closest('tr');
-        if (!row) return;
-        const colIndex = Array.from(row.cells).indexOf(td);
-
-        // Fire ONLY on the Quantity column (col 5)
-        if (colIndex === BOQ_COL.QUANTITY) {
-            console.log('[Calculations] BOQ Quantity changed — running SCS Calc...');
-            runSCSCalc();
-        }
-    };
-
-    // input: typing/spinner updates, change: committed value updates.
-    boqTbody.addEventListener('input', handleQuantityEdit);
-    boqTbody.addEventListener('change', handleQuantityEdit);
-    boqTbody.dataset.scsCalcBound = 'true';
-
-    console.log('[Calculations] BOQ Quantity trigger bound successfully.');
+    calcLog('BOQ Quantity trigger helper ready. Edit the BOQ Quantity field to run calculations.');
 }
 
 // Auto-bind when the widget loads so edit mode always has the trigger.
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindBOQQuantityTrigger);
+    document.addEventListener('DOMContentLoaded', initBOQQuantityTrigger);
 } else {
-    bindBOQQuantityTrigger();
+    initBOQQuantityTrigger();
 }
