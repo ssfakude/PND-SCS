@@ -375,11 +375,17 @@ function bindBOQQuantityTrigger() {
         return;
     }
 
-    boqTbody.addEventListener('input', function (e) {
+    // Prevent duplicate listeners when edit mode re-initializes the widget.
+    if (boqTbody.dataset.scsCalcBound === 'true') {
+        return;
+    }
+
+    const handleQuantityEdit = function (e) {
         const td = e.target.closest('td');
         if (!td) return;
 
         const row      = td.closest('tr');
+        if (!row) return;
         const colIndex = Array.from(row.cells).indexOf(td);
 
         // Fire ONLY on the Quantity column (col 5)
@@ -387,7 +393,19 @@ function bindBOQQuantityTrigger() {
             console.log('[Calculations] BOQ Quantity changed — running SCS Calc...');
             runSCSCalc();
         }
-    });
+    };
+
+    // input: typing/spinner updates, change: committed value updates.
+    boqTbody.addEventListener('input', handleQuantityEdit);
+    boqTbody.addEventListener('change', handleQuantityEdit);
+    boqTbody.dataset.scsCalcBound = 'true';
 
     console.log('[Calculations] BOQ Quantity trigger bound successfully.');
+}
+
+// Auto-bind when the widget loads so edit mode always has the trigger.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindBOQQuantityTrigger);
+} else {
+    bindBOQQuantityTrigger();
 }
